@@ -1,4 +1,4 @@
-name: MacOS VNC (Fixed 2026)
+name: MacOS VNC
 
 on: [push, workflow_dispatch]
 
@@ -22,10 +22,10 @@ jobs:
         run: |
           echo "🔧 Включаем Screen Sharing + VNC..."
 
-          # Самый надёжный способ задать пароль на GitHub macOS runner
-          echo "runner:P@ssw0rd!" | sudo chpasswd
+          # Задаём пароль пользователю runner (sysadminctl — родной инструмент macOS)
+          sudo sysadminctl -resetPasswordForUser runner -newPassword "P@ssw0rd!"
 
-          # Включаем VNC с legacy-режимом (для RealVNC Viewer)
+          # Включаем VNC с legacy-режимом (обязательно для RealVNC Viewer)
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate -configure -access -on \
             -users runner -privs -all -allowAccessFor -allUsers \
@@ -33,6 +33,16 @@ jobs:
             -clientopts -setvncpw -vncpw "P@ssw0rd!" \
             -restart -agent
 
+          # Perl-хак для правильного хэширования VNC-пароля (решает 99% ошибок аутентификации на macOS 13+)
+          echo "P@ssw0rd!" | perl -we '
+            BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA" };
+            $_ = <>; chomp; s/^(.{8}).*/$1/;
+            @p = unpack "C*", $_;
+            foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) };
+            print "\n"
+          ' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt > /dev/null
+
+          # Дополнительно запускаем сервис
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
           sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
 
