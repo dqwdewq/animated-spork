@@ -1,4 +1,4 @@
-name: MacOS VNC (RealVNC fixed)
+name: MacOS VNC (Fixed 2026)
 
 on: [push, workflow_dispatch]
 
@@ -7,7 +7,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Download ngrok (arm64)
+      - name: Download ngrok
         run: curl -sL https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-arm64.zip -o ngrok.zip
 
       - name: Extract
@@ -18,14 +18,14 @@ jobs:
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Enable VNC Screen Sharing (исправлено auth error 2026)
+      - name: Enable VNC Screen Sharing (auth error исправлен!)
         run: |
-          echo "🔧 Включаем Screen Sharing + VNC с legacy-режимом..."
+          echo "🔧 Включаем Screen Sharing + VNC..."
 
-          # Устанавливаем пароль пользователю runner
-          sudo dscl . -passwd /Users/runner "P@ssw0rd!"
+          # Самый надёжный способ задать пароль на GitHub macOS runner
+          echo "runner:P@ssw0rd!" | sudo chpasswd
 
-          # Основная активация ARDAgent
+          # Включаем VNC с legacy-режимом (для RealVNC Viewer)
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate -configure -access -on \
             -users runner -privs -all -allowAccessFor -allUsers \
@@ -33,25 +33,12 @@ jobs:
             -clientopts -setvncpw -vncpw "P@ssw0rd!" \
             -restart -agent
 
-          # Надёжное задание VNC-пароля через файл (работает на всех версиях macOS 13+)
-          echo "P@ssw0rd!" | perl -we '
-            BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA" };
-            $_ = <>; chomp; s/^(.{8}).*/$1/;
-            @p = unpack "C*", $_;
-            foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) };
-            print "\n"
-          ' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt >/dev/null
-
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
-
-          # Дополнительно запускаем сервис
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
           sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
 
           echo "✅ VNC успешно включён!"
           echo "👤 Username: runner"
           echo "🔑 Password: P@ssw0rd!"
-          echo "💡 В RealVNC Viewer обязательно поставь Encryption = Prefer Off"
 
       - name: Create ngrok Tunnel
         run: ./ngrok tcp 5900
