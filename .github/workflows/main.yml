@@ -13,18 +13,29 @@ jobs:
       - name: Extract
         run: unzip ngrok.zip
 
-      - name: Auth
-        run: ./ngrok authtoken $NGROK_AUTH_TOKEN
+      - name: Auth ngrok
+        run: ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Enable Screen Sharing (VNC)
+      - name: Enable VNC Screen Sharing (исправлено auth error)
         run: |
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -activate -configure -access -on -users runner -privs -all -restart -agent
+          echo "🚀 Активируем Screen Sharing + VNC с legacy-режимом..."
 
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -configure -clientopts -setvncpw -vncpw "P@ssw0rd!"
+            -activate -configure -access -on \
+            -users runner -privs -all -allowAccessFor -allUsers \
+            -clientopts -setvnclegacy -vnclegacy yes \
+            -clientopts -setvncpw -vncpw "P@ssw0rd!" \
+            -restart -agent
 
-      - name: Create Tunnel
+          # Дополнительно гарантируем запуск сервиса
+          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+          sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
+
+          echo "✅ VNC успешно включён!"
+          echo "👤 Username: runner"
+          echo "🔑 Password: P@ssw0rd!"
+
+      - name: Create ngrok Tunnel
         run: ./ngrok tcp 5900
